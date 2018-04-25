@@ -266,7 +266,12 @@ qq_init(struct run_params rp, qhg_gauge_field gf, enum qhg_fermion_bc_time bc)
   state.invert_param.reliable_delta = 5e-3;
   state.invert_param.use_sloppy_partial_accumulator = 0;
   state.invert_param.max_res_increase = 6;
-
+  /* 
+     Changed in QUDA 0.9. We now need to state we will 
+     invert a flavor at a time via this variable
+   */
+  state.invert_param.twist_flavor = QUDA_TWIST_SINGLET;
+  
   state.invert_param.cpu_prec = 8;
   state.invert_param.cuda_prec = 8 /* 4 */;
   state.invert_param.cuda_prec_sloppy = 4;
@@ -305,11 +310,17 @@ qq_invert(qhg_spinor_field out, qhg_spinor_field in, double eps, enum mu_sign s,
 {
   int am_io_proc = in.lat->comms->proc_id == 0 ? 1 : 0;
   state->invert_param.tol = eps;
-  state->invert_param.twist_flavor = s == up ? QUDA_TWIST_MINUS : QUDA_TWIST_PLUS;
+  /*
+    Changed in QUDA 0.9. We now need to change the sign of mu to switch between doublet flavors.
+    state->invert_param.twist_flavor = s == up ? QUDA_TWIST_MINUS : QUDA_TWIST_PLUS;
+  */
+  double mu_s = s == up ? -1 : +1;
 
   cnvrt_spinor_field_to_quda(aux_spinor[0], in);
   double t0 = qhg_stop_watch(0);
+  state->invert_param.mu *= mu_s;
   invertQuda(aux_spinor[1], aux_spinor[0], &state->invert_param);
+  state->invert_param.mu *= mu_s;
   if(am_io_proc)
     printf("Done: %i iter / %g secs = %g Gflops, total time = %g secs\n",
 	   state->invert_param.iter, state->invert_param.secs,
